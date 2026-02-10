@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   ScrollView,
   ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,15 +35,49 @@ export default function MeetingDetailScreen() {
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
+  const fetchMeeting = useCallback(async () => {
     if (!id) return;
+    try {
+      const data = await getMeeting(id);
+      setMeeting(data);
+      setError(null);
 
-    getMeeting(id)
-      .then(setMeeting)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load meeting'))
-      .finally(() => setLoading(false));
+      // Stop polling once processing is done
+      if (data.status === 'completed' || data.status === 'failed') {
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load meeting');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchMeeting();
+  }, [fetchMeeting]);
+
+  // Auto-poll every 5s while meeting is still processing
+  // This handles the case where user opens from notification
+  // before the transcript is fully ready
+  useEffect(() => {
+    if (meeting && (meeting.status === 'processing' || meeting.status === 'uploading')) {
+      pollRef.current = setInterval(fetchMeeting, 5000);
+    }
+
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [meeting?.status, fetchMeeting]);
 
   if (loading) {
     return (
@@ -57,6 +92,9 @@ export default function MeetingDetailScreen() {
       <View style={styles.centered}>
         <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
         <Text style={styles.errorText}>{error ?? 'Meeting not found'}</Text>
+        <Pressable onPress={fetchMeeting} style={styles.retryButton}>
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
       </View>
     );
   }
@@ -92,13 +130,19 @@ export default function MeetingDetailScreen() {
         </View>
       ) : (
         <View style={styles.processingCard}>
-          <ActivityIndicator size="small" color="#F59E0B" />
+          {meeting.status === 'failed' ? (
+            <Ionicons name="alert-circle-outline" size={20} color="#EF4444" />
+          ) : (
+            <ActivityIndicator size="small" color="#F59E0B" />
+          )}
           <Text style={styles.processingText}>
             {meeting.status === 'processing'
               ? 'Transcription in progress...'
-              : meeting.status === 'failed'
-                ? 'Transcription failed'
-                : 'Waiting for processing...'}
+              : meeting.status === 'uploading'
+                ? 'Uploading audio...'
+                : meeting.status === 'failed'
+                  ? 'Transcription failed. Please try again.'
+                  : 'Waiting for processing...'}
           </Text>
         </View>
       )}
@@ -113,6 +157,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    paddingBottom: 40,
   },
   centered: {
     flex: 1,
@@ -180,10 +225,24 @@ const styles = StyleSheet.create({
   processingText: {
     fontSize: 14,
     color: '#A0A0A0',
+    flex: 1,
   },
   errorText: {
     fontSize: 16,
     color: '#EF4444',
     textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#1E1E23',
+    marginTop: 8,
+  },
+  retryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#F59E0B',
   },
 });

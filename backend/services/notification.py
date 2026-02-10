@@ -1,5 +1,5 @@
-import httpx
 import logging
+import httpx
 
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 logger = logging.getLogger(__name__)
@@ -10,7 +10,15 @@ async def send_push_notification(
     meeting_id: str,
     summary_preview: str,
 ) -> None:
-    """Send an Expo push notification when the transcript is ready."""
+    """
+    Send an Expo push notification when the transcript is ready.
+
+    The notification payload includes:
+    - title: static "Meeting transcript ready!"
+    - body: first 100 chars of the summary
+    - data.meetingId: used by the app to deep link to /meeting/{id}
+    - channelId: "meeting-ready" (matches the Android channel created in the app)
+    """
     if not push_token:
         logger.warning("No push token provided, skipping notification")
         return
@@ -31,7 +39,11 @@ async def send_push_notification(
         "channelId": "meeting-ready",
     }
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(EXPO_PUSH_URL, json=payload)
-        response.raise_for_status()
-        logger.info(f"Push notification sent for meeting {meeting_id}")
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(EXPO_PUSH_URL, json=payload)
+            response.raise_for_status()
+            logger.info(f"Push notification sent for meeting {meeting_id}")
+    except Exception as e:
+        # Non-fatal: meeting is already saved, user can still view it manually
+        logger.error(f"Failed to send push notification: {e}")

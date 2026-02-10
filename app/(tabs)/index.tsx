@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Alert } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useAudioRecording } from '@/hooks/useAudioRecording';
+import { useRecording } from '@/lib/RecordingContext';
 import { createMeeting, uploadAudio, updateMeetingStatus } from '@/lib/database';
 import { registerForPushNotifications } from '@/lib/notifications';
 
@@ -14,18 +14,21 @@ function formatDuration(seconds: number): string {
 }
 
 export default function RecordScreen() {
-  const { isRecording, duration, startRecording, stopRecording, error } =
-    useAudioRecording();
+  const { isRecording, duration, metering, startRecording, stopRecording, error } =
+    useRecording();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleToggleRecording = async () => {
+    if (isProcessing) return;
+
     if (isRecording) {
+      // ---- Stop recording & upload ------------------------------------
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setIsProcessing(true);
 
       try {
         const uri = await stopRecording();
-        if (!uri) throw new Error('No recording file');
+        if (!uri) throw new Error('No recording file produced');
 
         const pushToken = await registerForPushNotifications();
         const meeting = await createMeeting(duration);
@@ -43,6 +46,11 @@ export default function RecordScreen() {
             push_token: pushToken ?? '',
           }),
         });
+
+        Alert.alert(
+          'Recording saved',
+          'Your meeting is being transcribed. You\'ll get a notification when it\'s ready.',
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Something went wrong';
         Alert.alert('Error', message);
@@ -50,47 +58,80 @@ export default function RecordScreen() {
         setIsProcessing(false);
       }
     } else {
+      // ---- Start recording --------------------------------------------
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       await startRecording();
     }
   };
 
+  // Metering drives the glow ring size around the record button
+  const glowScale = isRecording ? 1 + metering * 0.25 : 1;
+
   return (
     <View style={styles.container}>
       {error && <Text style={styles.errorText}>{error}</Text>}
 
-      <Text style={styles.timer}>{formatDuration(duration)}</Text>
+      {/* Timer */}
+      <Text style={[styles.timer, isRecording && styles.timerActive]}>
+        {formatDuration(duration)}
+      </Text>
 
+      {/* Status */}
       <Text style={styles.statusText}>
         {isProcessing
           ? 'Uploading & processing...'
           : isRecording
-            ? 'Recording in progress'
+            ? 'Recording — you can leave the app'
             : 'Tap to start recording'}
       </Text>
 
-      <Pressable
-        onPress={handleToggleRecording}
-        disabled={isProcessing}
-        style={({ pressed }) => [
-          styles.recordButton,
-          isRecording && styles.recordButtonActive,
-          pressed && styles.recordButtonPressed,
-          isProcessing && styles.recordButtonDisabled,
-        ]}
-      >
-        <Ionicons
-          name={isRecording ? 'stop' : 'mic'}
-          size={48}
-          color={isRecording ? '#FFFFFF' : '#F59E0B'}
-        />
-      </Pressable>
+      {/* Record / Stop button */}
+      <View style={styles.buttonContainer}>
+        {/* Metering glow ring */}
+        {isRecording && (
+          <View
+            style={[
+              styles.glowRing,
+              { transform: [{ scale: glowScale }] },
+            ]}
+          />
+        )}
 
+        <Pressable
+          onPress={handleToggleRecording}
+          disabled={isProcessing}
+          style={({ pressed }) => [
+            styles.recordButton,
+            isRecording && styles.recordButtonActive,
+            pressed && styles.recordButtonPressed,
+            isProcessing && styles.recordButtonDisabled,
+          ]}
+        >
+          {isProcessing ? (
+            <ActivityIndicator size="large" color="#F5F5F0" />
+          ) : (
+            <Ionicons
+              name={isRecording ? 'stop' : 'mic'}
+              size={48}
+              color={isRecording ? '#FFFFFF' : '#F59E0B'}
+            />
+          )}
+        </Pressable>
+      </View>
+
+      {/* Live indicator */}
       {isRecording && (
         <View style={styles.liveIndicator}>
           <View style={styles.liveDot} />
           <Text style={styles.liveText}>LIVE</Text>
         </View>
+      )}
+
+      {/* Background hint */}
+      {isRecording && (
+        <Text style={styles.hintText}>
+          Recording continues in background and when screen is locked
+        </Text>
       )}
     </View>
   );
@@ -111,6 +152,9 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     marginBottom: 12,
   },
+  timerActive: {
+    color: '#FFFFFF',
+  },
   statusText: {
     fontSize: 16,
     color: '#A0A0A0',
@@ -122,6 +166,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
     paddingHorizontal: 32,
+  },
+  buttonContainer: {
+    width: 140,
+    height: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glowRing: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
   },
   recordButton: {
     width: 120,
@@ -162,5 +219,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#EF4444',
     letterSpacing: 2,
+  },
+  hintText: {
+    fontSize: 13,
+    color: '#6B6B6B',
+    marginTop: 16,
+    textAlign: 'center',
+    paddingHorizontal: 48,
   },
 });

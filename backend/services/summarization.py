@@ -1,24 +1,45 @@
-import os
+import logging
 from openai import OpenAI
+from config import settings
+
+logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = (
+    "You are a meeting assistant. Summarize the following meeting transcript. "
+    "Structure your response as:\n"
+    "- **Key Topics**: Main subjects discussed\n"
+    "- **Decisions**: Any decisions that were made\n"
+    "- **Action Items**: Tasks assigned with owners if mentioned\n\n"
+    "Keep the summary under 200 words. Be concise and factual."
+)
 
 
 async def summarize_transcript(transcript: str) -> str:
-    """Generate a summary of the meeting transcript using GPT."""
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    """
+    Generate a structured summary of a meeting transcript using GPT.
+    Falls back to a basic extraction if the API call fails.
+    """
+    try:
+        client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a meeting assistant. Summarize the following meeting transcript concisely. "
-                    "Include: key topics discussed, decisions made, and action items with owners if mentioned. "
-                    "Keep the summary under 200 words."
-                ),
-            },
-            {"role": "user", "content": transcript},
-        ],
-    )
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": transcript},
+            ],
+            max_tokens=500,
+            temperature=0.3,
+        )
 
-    return response.choices[0].message.content or "No summary generated."
+        summary = response.choices[0].message.content or "No summary generated."
+        logger.info(f"GPT summary generated: {len(summary)} chars")
+        return summary
+
+    except Exception as e:
+        logger.error(f"Summarization failed: {e}")
+        # Fallback: return the first 500 chars of the transcript as a basic summary
+        preview = transcript[:500].strip()
+        if len(transcript) > 500:
+            preview += "..."
+        return f"Summary unavailable. Transcript preview:\n\n{preview}"

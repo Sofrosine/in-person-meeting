@@ -1,8 +1,12 @@
 import React from 'react';
+import { View, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useRecording } from '@/lib/RecordingContext';
 
 export default function TabLayout() {
+  const { isRecording } = useRecording();
+
   return (
     <Tabs
       screenOptions={{
@@ -21,7 +25,10 @@ export default function TabLayout() {
         options={{
           title: 'Record',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="mic-outline" size={size} color={color} />
+            <View>
+              <Ionicons name="mic-outline" size={size} color={color} />
+              {isRecording && <View style={styles.recordingDot} />}
+            </View>
           ),
         }}
       />
@@ -37,3 +44,15 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  recordingDot: {
+    position: 'absolute',
+    top: -2,
+    right: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+  },
+});

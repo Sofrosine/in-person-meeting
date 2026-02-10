@@ -15,10 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.meetingnotes.app",
-      "infoPlist": {
-        "UIBackgroundModes": ["audio"]
-      }
+      "bundleIdentifier": "com.meetingnotes.app"
     },
     "android": {
       "adaptiveIcon": {
