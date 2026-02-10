@@ -1,7 +1,14 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
-import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
-import type { RecordingStatus } from 'expo-av/build/Audio';
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  setAudioModeAsync,
+  requestRecordingPermissionsAsync,
+  IOSOutputFormat,
+  AudioQuality,
+} from 'expo-audio';
+import type { RecordingOptions, RecordingStatus, RecorderState } from 'expo-audio';
 import * as Notifications from 'expo-notifications';
 
 // ---------------------------------------------------------------------------
@@ -10,23 +17,22 @@ import * as Notifications from 'expo-notifications';
 // M4A/AAC provides good compression with high fidelity for speech.
 // 128kbps mono is plenty for voice while keeping file sizes reasonable
 // (~1 MB/minute). Compatible across iOS and Android.
-const MEETING_RECORDING_OPTIONS: Audio.RecordingOptions = {
+const MEETING_RECORDING_OPTIONS: RecordingOptions = {
   isMeteringEnabled: true,
+  extension: '.m4a',
+  sampleRate: 44100,
+  numberOfChannels: 1,
+  bitRate: 128000,
   android: {
-    extension: '.m4a',
-    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-    audioEncoder: Audio.AndroidAudioEncoder.AAC,
-    sampleRate: 44100,
-    numberOfChannels: 1,
-    bitRate: 128000,
+    outputFormat: 'mpeg4',
+    audioEncoder: 'aac',
   },
   ios: {
-    extension: '.m4a',
-    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-    audioQuality: Audio.IOSAudioQuality.HIGH,
-    sampleRate: 44100,
-    numberOfChannels: 1,
-    bitRate: 128000,
+    outputFormat: IOSOutputFormat.MPEG4AAC,
+    audioQuality: AudioQuality.HIGH,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
   },
   web: {
     mimeType: 'audio/webm',
@@ -40,7 +46,7 @@ const MEETING_RECORDING_OPTIONS: Audio.RecordingOptions = {
 export interface UseAudioRecording {
   /** Whether the recording is currently active */
   isRecording: boolean;
-  /** Elapsed recording time in seconds (driven by expo-av status callbacks) */
+  /** Elapsed recording time in seconds (driven by expo-audio state hook) */
   duration: number;
   /** Current audio metering level (0-1) for visualizations */
   metering: number;
@@ -55,9 +61,6 @@ export interface UseAudioRecording {
 // ---------------------------------------------------------------------------
 // Android foreground notification for recording
 // ---------------------------------------------------------------------------
-// On Android, a persistent notification signals that the app is performing
-// active work. This satisfies the OS requirement for foreground services
-// and gives the user a way to return to the app.
 const ANDROID_NOTIFICATION_ID = 'recording-active';
 
 async function showAndroidRecordingNotification(): Promise<string | undefined> {
@@ -85,136 +88,115 @@ async function dismissAndroidRecordingNotification(): Promise<void> {
 // Hook
 // ---------------------------------------------------------------------------
 export function useAudioRecording(): UseAudioRecording {
-  const [isRecording, setIsRecording] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [metering, setMetering] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const isActiveRef = useRef(false);
 
-  const recordingRef = useRef<Audio.Recording | null>(null);
-
-  // ---- Cleanup on unmount --------------------------------------------
-  useEffect(() => {
-    return () => {
-      if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync().catch(() => {});
-        dismissAndroidRecordingNotification();
-      }
-    };
-  }, []);
-
-  // ---- Handle app state changes (background → foreground) ------------
-  // When the app returns to the foreground, sync the duration from the
-  // recording status to ensure the timer is accurate after being in the
-  // background (where JS timers are throttled/paused).
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', async (nextState) => {
-      if (nextState === 'active' && recordingRef.current) {
-        try {
-          const status = await recordingRef.current.getStatusAsync();
-          if (status.isRecording && status.durationMillis !== undefined) {
-            setDuration(Math.floor(status.durationMillis / 1000));
-          }
-        } catch {
-          // Recording may have been invalidated – ignore
-        }
-      }
-    });
-
-    return () => subscription.remove();
-  }, []);
-
-  // ---- Recording status callback -------------------------------------
-  // expo-av fires this at ~500ms intervals. We use it for the timer and
-  // metering instead of setInterval, which drifts and stops in background.
-  const onRecordingStatusUpdate = useCallback((status: RecordingStatus) => {
-    if (status.isRecording) {
-      setDuration(Math.floor((status.durationMillis ?? 0) / 1000));
-      // Metering is in dBFS (negative). Normalize to 0–1 range.
-      if (status.metering !== undefined) {
-        const normalized = Math.max(0, Math.min(1, (status.metering + 60) / 60));
-        setMetering(normalized);
-      }
+  // Status listener for recording completion/error events
+  const onRecordingStatus = useCallback((status: RecordingStatus) => {
+    if (status.isFinished && isActiveRef.current) {
+      // Recording finished (OS interruption, phone call, etc.)
+      isActiveRef.current = false;
+      dismissAndroidRecordingNotification();
     }
-
-    // Handle interruptions (e.g., phone call)
-    if (status.isDoneRecording && !status.isRecording && recordingRef.current) {
-      // The OS interrupted the recording (phone call, another audio app, etc.)
-      // The recording file is still valid up to the interruption point.
-      setIsRecording(false);
-      setMetering(0);
+    if (status.hasError && status.error) {
+      setError(status.error);
+      isActiveRef.current = false;
       dismissAndroidRecordingNotification();
     }
   }, []);
 
-  // ---- Start recording -----------------------------------------------
+  // expo-audio hooks: recorder instance + polling state
+  const recorder = useAudioRecorder(MEETING_RECORDING_OPTIONS, onRecordingStatus);
+  const recorderState: RecorderState = useAudioRecorderState(recorder, 500);
+
+  // Derive values from the polled recorder state
+  const isRecording = recorderState.isRecording;
+  const duration = Math.floor(recorderState.durationMillis / 1000);
+  const metering = recorderState.metering !== undefined
+    ? Math.max(0, Math.min(1, (recorderState.metering + 60) / 60))
+    : 0;
+
+  // ---- Handle media services reset (iOS system interruption) --------
+  useEffect(() => {
+    if (recorderState.mediaServicesDidReset && isActiveRef.current) {
+      isActiveRef.current = false;
+      setError('Recording was interrupted by the system.');
+      dismissAndroidRecordingNotification();
+    }
+  }, [recorderState.mediaServicesDidReset]);
+
+  // ---- Cleanup on unmount -------------------------------------------
+  useEffect(() => {
+    return () => {
+      if (isActiveRef.current) {
+        recorder.stop();
+        dismissAndroidRecordingNotification();
+      }
+    };
+  }, [recorder]);
+
+  // ---- Handle app state changes (background → foreground) -----------
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', () => {
+      // RecorderState hook auto-syncs on next poll; no manual action needed
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // ---- Start recording ----------------------------------------------
   const startRecording = useCallback(async () => {
     try {
       setError(null);
 
       // 1. Request permission
-      const permission = await Audio.requestPermissionsAsync();
+      const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
         setError('Microphone permission is required to record meetings.');
         return;
       }
 
       // 2. Configure audio mode for background recording
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true, // CRITICAL – keeps audio session alive
-        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-        shouldDuckAndroid: false,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
+        allowsBackgroundRecording: true,
+        interruptionMode: 'doNotMix',
+        shouldRouteThroughEarpiece: false,
       });
 
-      // 3. Create and start the recording
-      const { recording } = await Audio.Recording.createAsync(
-        MEETING_RECORDING_OPTIONS,
-        onRecordingStatusUpdate,
-        500, // status update interval in ms
-      );
-
-      recordingRef.current = recording;
-      setIsRecording(true);
-      setDuration(0);
-      setMetering(0);
+      // 3. Prepare and start
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      isActiveRef.current = true;
 
       // 4. Show persistent notification on Android
       await showAndroidRecordingNotification();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start recording';
       setError(message);
-      setIsRecording(false);
+      isActiveRef.current = false;
     }
-  }, [onRecordingStatusUpdate]);
+  }, [recorder]);
 
-  // ---- Stop recording ------------------------------------------------
+  // ---- Stop recording -----------------------------------------------
   const stopRecording = useCallback(async (): Promise<string | null> => {
     try {
-      if (!recordingRef.current) {
-        setIsRecording(false);
+      if (!isActiveRef.current) {
         return null;
       }
 
-      // Get final status before stopping for accurate duration
-      const finalStatus = await recordingRef.current.getStatusAsync();
-      if (finalStatus.durationMillis) {
-        setDuration(Math.floor(finalStatus.durationMillis / 1000));
-      }
+      await recorder.stop();
+      isActiveRef.current = false;
 
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
+      const uri = recorder.uri;
 
       // Reset audio mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: false,
+      await setAudioModeAsync({
+        allowsRecording: false,
+        shouldPlayInBackground: false,
+        allowsBackgroundRecording: false,
       });
-
-      setIsRecording(false);
-      setMetering(0);
 
       // Dismiss Android recording notification
       await dismissAndroidRecordingNotification();
@@ -223,11 +205,11 @@ export function useAudioRecording(): UseAudioRecording {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to stop recording';
       setError(message);
-      setIsRecording(false);
+      isActiveRef.current = false;
       await dismissAndroidRecordingNotification();
       return null;
     }
-  }, []);
+  }, [recorder]);
 
   return { isRecording, duration, metering, startRecording, stopRecording, error };
 }

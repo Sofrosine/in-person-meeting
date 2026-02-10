@@ -14,10 +14,9 @@ import { useAuth } from '@/lib/AuthContext';
 import { colors } from '@/lib/theme';
 
 export default function LoginScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,9 +29,7 @@ export default function LoginScreen() {
     setLoading(true);
     setError(null);
 
-    const result = isSignUp
-      ? await signUp(email.trim(), password)
-      : await signIn(email.trim(), password);
+    const result = await signIn(email.trim(), password);
 
     if (result) {
       setError(result);
@@ -77,7 +74,7 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
             secureTextEntry
-            autoComplete={isSignUp ? 'new-password' : 'current-password'}
+            autoComplete="current-password"
           />
 
           <Pressable
@@ -92,20 +89,10 @@ export default function LoginScreen() {
             {loading ? (
               <ActivityIndicator color={colors.background} />
             ) : (
-              <Text style={styles.buttonText}>
-                {isSignUp ? 'Create Account' : 'Sign In'}
-              </Text>
+              <Text style={styles.buttonText}>Sign In</Text>
             )}
           </Pressable>
         </View>
-
-        <Pressable onPress={() => { setIsSignUp(!isSignUp); setError(null); }}>
-          <Text style={styles.switchText}>
-            {isSignUp
-              ? 'Already have an account? Sign In'
-              : "Don't have an account? Sign Up"}
-          </Text>
-        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
@@ -139,7 +126,6 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: 14,
-    marginBottom: 24,
   },
   input: {
     backgroundColor: colors.surface,
@@ -178,11 +164,6 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 14,
     color: colors.error,
-    textAlign: 'center',
-  },
-  switchText: {
-    fontSize: 14,
-    color: colors.accent,
     textAlign: 'center',
   },
 });

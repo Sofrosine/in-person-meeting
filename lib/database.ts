@@ -42,7 +42,7 @@ export async function uploadAudio(fileUri: string, meetingId: string): Promise<s
   const { error: uploadError } = await supabase.storage
     .from('recordings')
     .upload(filePath, blob, {
-      contentType: 'audio/m4a',
+      contentType: 'audio/mp4',
       upsert: true,
     });
 

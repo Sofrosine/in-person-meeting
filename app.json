@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Meeting Notes",
-    "slug": "in-person-meeting-app",
+    "slug": "in-person-meeting",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,7 +15,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.meetingnotes.app"
+      "bundleIdentifier": "com.sofrosine.meetingnotes",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +28,11 @@
         "backgroundColor": "#0D0D0F"
       },
       "package": "com.meetingnotes.app",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -32,7 +41,7 @@
     },
     "plugins": [
       "expo-router",
-      "expo-av",
+      "expo-audio",
       [
         "expo-notifications",
         {
@@ -41,8 +50,14 @@
       ],
       "./plugins/withBackgroundAudio"
     ],
+    "extra": {
+      "eas": {
+        "projectId": "21ad3e32-57a1-4724-b1d5-e040fbfe06f5"
+      }
+    },
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "owner": "soultan"
   }
 }

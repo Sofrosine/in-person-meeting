@@ -8,8 +8,9 @@ A React Native/Expo app that records in-person meetings with background audio ca
 
 - Node.js 18+
 - Python 3.10+
-- Expo CLI (`npm install -g expo-cli`)
+- Expo CLI (`npm install -g expo-cli`) and EAS CLI (`npm install -g eas-cli`)
 - Physical iOS/Android device (background recording and push notifications require a real device)
+- For iOS: Xcode with a valid Apple Developer account for code signing
 - Supabase project ([supabase.com](https://supabase.com))
 - OpenAI API key ([platform.openai.com](https://platform.openai.com))
 
@@ -17,7 +18,7 @@ A React Native/Expo app that records in-person meetings with background audio ca
 
 ```bash
 # Install dependencies
-npm install
+yarn install
 
 # Copy environment file and fill in your values
 cp .env.example .env
@@ -25,9 +26,12 @@ cp .env.example .env
 # Start the dev server
 npx expo start
 
-# Build for device (required for background audio + push)
-npx expo run:ios    # or npx expo run:android
+# Build for physical device (required for background audio + push)
+npx expo prebuild --clean
+npx expo run:ios --device    # or npx expo run:android
 ```
+
+> **Note:** When testing on a physical iOS device, the backend URL in `.env` must use your machine's local IP (e.g. `http://192.168.1.x:8000`) instead of `localhost`. iOS requires `NSAllowsLocalNetworking` for plain HTTP to local IPs — this is already configured in `app.json`.
 
 ### 2. Backend
 
@@ -44,8 +48,8 @@ pip install -r requirements.txt
 # Copy environment file and fill in your values
 cp .env.example .env
 
-# Start the server
-uvicorn main:app --reload --port 8000
+# Start the server (use 0.0.0.0 so physical devices on LAN can reach it)
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 3. Supabase Setup
@@ -57,6 +61,13 @@ Run the SQL migration in your Supabase SQL Editor:
 ```
 
 This creates the `meetings` table, `push_tokens` table, RLS policies, and a private `recordings` storage bucket.
+
+### Test Credentials
+
+A test account is pre-configured in the Supabase project:
+
+- **Email:** `hellotest@yopmail.com`
+- **Password:** `@Ymail123`
 
 ### Environment Variables
 
@@ -79,7 +90,7 @@ This creates the `meetings` table, `push_tokens` table, RLS policies, and a priv
 
 **Custom Config Plugin over manual native edits** - A JavaScript Expo config plugin (`plugins/withBackgroundAudio.js`) declaratively configures both iOS (UIBackgroundModes, microphone permission) and Android (RECORD_AUDIO, FOREGROUND_SERVICE_MICROPHONE, foreground service declaration) native projects. This keeps native config reproducible across `npx expo prebuild` runs without ejecting.
 
-**expo-av status callbacks over setInterval** - The recording timer uses expo-av's native `onRecordingStatusUpdate` callback (500ms interval) instead of JavaScript `setInterval`. JS timers are throttled/paused when the app is backgrounded; native status callbacks continue accurately. An AppState listener re-syncs the timer on foreground return.
+**expo-audio hooks over setInterval** - The recording timer uses expo-audio's `useAudioRecorderState` hook (500ms polling) instead of JavaScript `setInterval`. JS timers are throttled/paused when the app is backgrounded; the native recorder state continues tracking accurately. The hook-based API also eliminates manual ref management for the recorder instance.
 
 **Signed URLs for private storage** - Audio files are stored in a private Supabase Storage bucket with RLS. The mobile app generates a time-limited signed URL (1 hour) for the backend to download, avoiding the need to pass auth credentials to the backend for storage access.
 
