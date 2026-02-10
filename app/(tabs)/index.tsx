@@ -26,6 +26,7 @@ export default function RecordScreen() {
         if (!uri) throw new Error('No recording file produced');
 
         const pushToken = await registerForPushNotifications();
+        console.log('[Recording] Push token for backend:', pushToken);
         const meeting = await createMeeting(duration);
         const audioUrl = await uploadAudio(uri, meeting.id);
         await updateMeetingStatus(meeting.id, 'processing', audioUrl);

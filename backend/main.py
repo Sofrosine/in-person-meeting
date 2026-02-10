@@ -73,6 +73,7 @@ async def process_meeting_task(request: ProcessMeetingRequest) -> None:
 
     try:
         logger.info(f"[{meeting_id}] Starting processing pipeline")
+        logger.info(f"[{meeting_id}] Push token: {request.push_token or '(empty)'}")
 
         # 1. Mark as processing
         _update_meeting(meeting_id, status="processing")

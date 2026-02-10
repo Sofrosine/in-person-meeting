@@ -66,6 +66,8 @@ export async function registerForPushNotifications(): Promise<string | null> {
     });
 
     const token = tokenResponse.data;
+    console.log('[Push] Token obtained:', token);
+    console.log('[Push] Project ID used:', projectId);
 
     // Persist to Supabase (upsert per user)
     try {

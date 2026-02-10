@@ -43,7 +43,17 @@ async def send_push_notification(
         async with httpx.AsyncClient() as client:
             response = await client.post(EXPO_PUSH_URL, json=payload)
             response.raise_for_status()
+            result = response.json()
             logger.info(f"Push notification sent for meeting {meeting_id}")
+            logger.info(f"Push token used: {push_token}")
+            logger.info(f"Expo push response: {result}")
+
+            # Check for per-ticket errors (Expo returns 200 even on errors)
+            data = result.get("data", [])
+            if data and isinstance(data, list):
+                for ticket in data:
+                    if ticket.get("status") == "error":
+                        logger.error(f"Push ticket error: {ticket}")
     except Exception as e:
         # Non-fatal: meeting is already saved, user can still view it manually
         logger.error(f"Failed to send push notification: {e}")
