@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system';
 import { supabase } from './supabase';
 import type { Meeting, MeetingStatus } from './types';
 
@@ -35,13 +36,14 @@ export async function uploadAudio(fileUri: string, meetingId: string): Promise<s
 
   const filePath = `${user.id}/${meetingId}.m4a`;
 
-  // Read file as blob for upload
-  const response = await fetch(fileUri);
-  const blob = await response.blob();
+  // Use expo-file-system's new File API to read as ArrayBuffer.
+  // React Native's fetch().blob() produces empty blobs for local files.
+  const file = new File(fileUri);
+  const arrayBuffer = await file.arrayBuffer();
 
   const { error: uploadError } = await supabase.storage
     .from('recordings')
-    .upload(filePath, blob, {
+    .upload(filePath, arrayBuffer, {
       contentType: 'audio/mp4',
       upsert: true,
     });

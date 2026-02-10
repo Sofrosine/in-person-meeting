@@ -91,15 +91,29 @@ export function useAudioRecording(): UseAudioRecording {
   const [error, setError] = useState<string | null>(null);
   const isActiveRef = useRef(false);
 
+  // Resolver for the stop() promise — waits for the isFinished callback
+  // so the file is fully flushed to disk before we read the URI.
+  const finishedResolverRef = useRef<((url: string | null) => void) | null>(null);
+
   // Status listener for recording completion/error events
   const onRecordingStatus = useCallback((status: RecordingStatus) => {
-    if (status.isFinished && isActiveRef.current) {
-      // Recording finished (OS interruption, phone call, etc.)
-      isActiveRef.current = false;
-      dismissAndroidRecordingNotification();
+    if (status.isFinished) {
+      // Resolve the pending stop promise with the final file URL
+      if (finishedResolverRef.current) {
+        finishedResolverRef.current(status.url);
+        finishedResolverRef.current = null;
+      }
+      if (isActiveRef.current) {
+        isActiveRef.current = false;
+        dismissAndroidRecordingNotification();
+      }
     }
     if (status.hasError && status.error) {
       setError(status.error);
+      if (finishedResolverRef.current) {
+        finishedResolverRef.current(null);
+        finishedResolverRef.current = null;
+      }
       isActiveRef.current = false;
       dismissAndroidRecordingNotification();
     }
@@ -186,10 +200,29 @@ export function useAudioRecording(): UseAudioRecording {
         return null;
       }
 
+      // Create a promise that resolves when the RecordingStatus callback
+      // fires with isFinished: true — this ensures the file is fully
+      // written to disk before we try to upload it.
+      const uriPromise = new Promise<string | null>((resolve) => {
+        const timeout = setTimeout(() => {
+          // Safety fallback: if callback doesn't fire within 5s, use recorder.uri
+          if (finishedResolverRef.current) {
+            finishedResolverRef.current = null;
+            resolve(recorder.uri);
+          }
+        }, 5000);
+
+        finishedResolverRef.current = (url) => {
+          clearTimeout(timeout);
+          resolve(url);
+        };
+      });
+
       await recorder.stop();
       isActiveRef.current = false;
 
-      const uri = recorder.uri;
+      // Wait for the file to be fully written
+      const uri = await uriPromise;
 
       // Reset audio mode
       await setAudioModeAsync({
@@ -206,6 +239,7 @@ export function useAudioRecording(): UseAudioRecording {
       const message = err instanceof Error ? err.message : 'Failed to stop recording';
       setError(message);
       isActiveRef.current = false;
+      finishedResolverRef.current = null;
       await dismissAndroidRecordingNotification();
       return null;
     }
