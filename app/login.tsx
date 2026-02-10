@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/AuthContext';
+import { colors } from '@/lib/theme';
 
 export default function LoginScreen() {
   const { signIn, signUp } = useAuth();
@@ -46,7 +47,7 @@ export default function LoginScreen() {
     >
       <View style={styles.content}>
         <View style={styles.header}>
-          <Ionicons name="mic" size={48} color="#F59E0B" />
+          <Ionicons name="mic" size={48} color={colors.accent} />
           <Text style={styles.title}>Meeting Notes</Text>
           <Text style={styles.subtitle}>Record, transcribe, and summarize your meetings</Text>
         </View>
@@ -61,7 +62,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="Email"
-            placeholderTextColor="#6B6B6B"
+            placeholderTextColor={colors.textMuted}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -72,7 +73,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="Password"
-            placeholderTextColor="#6B6B6B"
+            placeholderTextColor={colors.textMuted}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -89,7 +90,7 @@ export default function LoginScreen() {
             ]}
           >
             {loading ? (
-              <ActivityIndicator color="#0D0D0F" />
+              <ActivityIndicator color={colors.background} />
             ) : (
               <Text style={styles.buttonText}>
                 {isSignUp ? 'Create Account' : 'Sign In'}
@@ -113,7 +114,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0D0D0F',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -127,12 +128,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#F5F5F0',
+    color: colors.text,
     marginTop: 16,
   },
   subtitle: {
     fontSize: 15,
-    color: '#6B6B6B',
+    color: colors.textMuted,
     marginTop: 8,
     textAlign: 'center',
   },
@@ -141,17 +142,17 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   input: {
-    backgroundColor: '#1E1E23',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: '#F5F5F0',
+    color: colors.text,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.border,
   },
   button: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.accent,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0D0D0F',
+    color: colors.background,
   },
   errorBox: {
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -176,12 +177,12 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 14,
-    color: '#EF4444',
+    color: colors.error,
     textAlign: 'center',
   },
   switchText: {
     fontSize: 14,
-    color: '#F59E0B',
+    color: colors.accent,
     textAlign: 'center',
   },
 });

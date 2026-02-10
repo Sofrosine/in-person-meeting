@@ -1,8 +1,8 @@
-import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRecording } from '@/lib/RecordingContext';
+import { colors } from '@/lib/theme';
 
 export default function TabLayout() {
   const { isRecording } = useRecording();
@@ -10,14 +10,14 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#F59E0B',
-        tabBarInactiveTintColor: '#6B6B6B',
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: '#161619',
-          borderTopColor: 'rgba(255,255,255,0.06)',
+          backgroundColor: colors.tabBar,
+          borderTopColor: colors.border,
         },
-        headerStyle: { backgroundColor: '#0D0D0F' },
-        headerTintColor: '#F5F5F0',
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
       }}
     >
       <Tabs.Screen
@@ -53,6 +53,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.error,
   },
 });

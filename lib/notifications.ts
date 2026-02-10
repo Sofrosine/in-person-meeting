@@ -37,9 +37,9 @@ export async function registerForPushNotifications(): Promise<string | null> {
       return null;
     }
 
-    // Android: create notification channel for transcript-ready notifications
-    // This channel is referenced by the backend when sending push payloads
+    // Android: create notification channels
     if (Platform.OS === 'android') {
+      // Channel for transcript-ready push notifications (referenced by backend)
       await Notifications.setNotificationChannelAsync('meeting-ready', {
         name: 'Meeting Transcripts',
         description: 'Notifications when your meeting transcript is ready',
@@ -47,6 +47,15 @@ export async function registerForPushNotifications(): Promise<string | null> {
         vibrationPattern: [0, 250, 250, 250],
         enableVibrate: true,
         showBadge: true,
+      });
+
+      // Channel for the persistent recording indicator notification
+      await Notifications.setNotificationChannelAsync('recording', {
+        name: 'Active Recording',
+        description: 'Shown while a meeting is being recorded',
+        importance: Notifications.AndroidImportance.LOW,
+        enableVibrate: false,
+        showBadge: false,
       });
     }
 

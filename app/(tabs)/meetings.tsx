@@ -11,45 +11,32 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getMeetings } from '@/lib/database';
+import { formatDate, formatDuration } from '@/lib/formatters';
+import { colors } from '@/lib/theme';
 import type { Meeting, MeetingStatus } from '@/lib/types';
 
 const STATUS_CONFIG: Record<MeetingStatus, { color: string; label: string }> = {
-  recording: { color: '#EF4444', label: 'Recording' },
-  uploading: { color: '#F59E0B', label: 'Uploading' },
-  processing: { color: '#F59E0B', label: 'Processing' },
-  completed: { color: '#10B981', label: 'Completed' },
-  failed: { color: '#EF4444', label: 'Failed' },
+  recording: { color: colors.error, label: 'Recording' },
+  uploading: { color: colors.accent, label: 'Uploading' },
+  processing: { color: colors.accent, label: 'Processing' },
+  completed: { color: colors.success, label: 'Completed' },
+  failed: { color: colors.error, label: 'Failed' },
 };
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function formatDuration(seconds: number | null): string {
-  if (!seconds) return '--:--';
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${String(secs).padStart(2, '0')}`;
-}
 
 export default function MeetingsScreen() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   const fetchMeetings = useCallback(async () => {
     try {
+      setError(null);
       const data = await getMeetings();
       setMeetings(data);
-    } catch {
-      // Silently handle - show empty state
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load meetings');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -83,7 +70,7 @@ export default function MeetingsScreen() {
           <Text style={styles.cardDate}>{formatDate(item.created_at)}</Text>
           <View style={styles.cardFooter}>
             <Text style={styles.cardDuration}>
-              <Ionicons name="time-outline" size={12} color="#6B6B6B" />{' '}
+              <Ionicons name="time-outline" size={12} color={colors.textMuted} />{' '}
               {formatDuration(item.duration)}
             </Text>
             <View style={[styles.statusBadge, { backgroundColor: `${statusConfig.color}20` }]}>
@@ -100,7 +87,7 @@ export default function MeetingsScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#F59E0B" />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -113,16 +100,26 @@ export default function MeetingsScreen() {
         renderItem={renderMeeting}
         contentContainerStyle={meetings.length === 0 ? styles.centered : styles.list}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F59E0B" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="mic-off-outline" size={48} color="#6B6B6B" />
-            <Text style={styles.emptyTitle}>No meetings yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Record your first meeting from the Record tab
-            </Text>
-          </View>
+          error ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+              <Text style={styles.emptyTitle}>{error}</Text>
+              <Pressable onPress={() => { setRefreshing(true); fetchMeetings(); }} style={styles.retryButton}>
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="mic-off-outline" size={48} color={colors.textMuted} />
+              <Text style={styles.emptyTitle}>No meetings yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Record your first meeting from the Record tab
+              </Text>
+            </View>
+          )
         }
       />
     </View>
@@ -132,13 +129,13 @@ export default function MeetingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0D0D0F',
+    backgroundColor: colors.background,
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0D0D0F',
+    backgroundColor: colors.background,
   },
   list: {
     padding: 16,
@@ -146,11 +143,11 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: 'row',
-    backgroundColor: '#1E1E23',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.border,
     marginBottom: 12,
   },
   cardPressed: {
@@ -166,12 +163,12 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F5F5F0',
+    color: colors.text,
     marginBottom: 4,
   },
   cardDate: {
     fontSize: 13,
-    color: '#6B6B6B',
+    color: colors.textMuted,
     marginBottom: 12,
   },
   cardFooter: {
@@ -181,7 +178,7 @@ const styles = StyleSheet.create({
   },
   cardDuration: {
     fontSize: 13,
-    color: '#6B6B6B',
+    color: colors.textMuted,
     fontVariant: ['tabular-nums'],
   },
   statusBadge: {
@@ -200,11 +197,23 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#F5F5F0',
+    color: colors.text,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#6B6B6B',
+    color: colors.textMuted,
     textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    marginTop: 4,
+  },
+  retryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.accent,
   },
 });

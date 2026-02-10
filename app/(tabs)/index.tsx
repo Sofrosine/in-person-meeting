@@ -5,13 +5,8 @@ import * as Haptics from 'expo-haptics';
 import { useRecording } from '@/lib/RecordingContext';
 import { createMeeting, uploadAudio, updateMeetingStatus } from '@/lib/database';
 import { registerForPushNotifications } from '@/lib/notifications';
-
-function formatDuration(seconds: number): string {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  return [hrs, mins, secs].map((v) => String(v).padStart(2, '0')).join(':');
-}
+import { formatTimer } from '@/lib/formatters';
+import { colors } from '@/lib/theme';
 
 export default function RecordScreen() {
   const { isRecording, duration, metering, startRecording, stopRecording, error } =
@@ -37,7 +32,7 @@ export default function RecordScreen() {
 
         // Trigger backend processing
         const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
-        await fetch(`${backendUrl}/process-meeting`, {
+        const response = await fetch(`${backendUrl}/process-meeting`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -46,6 +41,10 @@ export default function RecordScreen() {
             push_token: pushToken ?? '',
           }),
         });
+
+        if (!response.ok) {
+          throw new Error('Backend processing request failed');
+        }
 
         Alert.alert(
           'Recording saved',
@@ -73,7 +72,7 @@ export default function RecordScreen() {
 
       {/* Timer */}
       <Text style={[styles.timer, isRecording && styles.timerActive]}>
-        {formatDuration(duration)}
+        {formatTimer(duration)}
       </Text>
 
       {/* Status */}
@@ -108,12 +107,12 @@ export default function RecordScreen() {
           ]}
         >
           {isProcessing ? (
-            <ActivityIndicator size="large" color="#F5F5F0" />
+            <ActivityIndicator size="large" color={colors.text} />
           ) : (
             <Ionicons
               name={isRecording ? 'stop' : 'mic'}
               size={48}
-              color={isRecording ? '#FFFFFF' : '#F59E0B'}
+              color={isRecording ? '#FFFFFF' : colors.accent}
             />
           )}
         </Pressable>
@@ -140,7 +139,7 @@ export default function RecordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0D0D0F',
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -148,7 +147,7 @@ const styles = StyleSheet.create({
   timer: {
     fontSize: 56,
     fontWeight: '200',
-    color: '#F5F5F0',
+    color: colors.text,
     fontVariant: ['tabular-nums'],
     marginBottom: 12,
   },
@@ -157,12 +156,12 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 16,
-    color: '#A0A0A0',
+    color: colors.textSecondary,
     marginBottom: 48,
   },
   errorText: {
     fontSize: 14,
-    color: '#EF4444',
+    color: colors.error,
     marginBottom: 16,
     textAlign: 'center',
     paddingHorizontal: 32,
@@ -184,15 +183,15 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#1E1E23',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: '#F59E0B',
+    borderColor: colors.accent,
   },
   recordButtonActive: {
-    backgroundColor: '#EF4444',
-    borderColor: '#EF4444',
+    backgroundColor: colors.error,
+    borderColor: colors.error,
     borderRadius: 24,
   },
   recordButtonPressed: {
@@ -211,18 +210,18 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.error,
     marginRight: 8,
   },
   liveText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#EF4444',
+    color: colors.error,
     letterSpacing: 2,
   },
   hintText: {
     fontSize: 13,
-    color: '#6B6B6B',
+    color: colors.textMuted,
     marginTop: 16,
     textAlign: 'center',
     paddingHorizontal: 48,

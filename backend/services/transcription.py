@@ -1,5 +1,5 @@
 import logging
-from openai import OpenAI
+from openai import AsyncOpenAI
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -11,12 +11,12 @@ async def transcribe_audio(audio_path: str) -> str:
 
     Whisper supports m4a, mp3, mp4, mpeg, mpga, wav, and webm formats.
     Max file size is 25 MB. For longer meetings, the file stays under
-    this limit at 128kbps mono (~1 MB/min → ~25 min max per call).
+    this limit at 128kbps mono (~1 MB/min -> ~25 min max per call).
     """
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     with open(audio_path, "rb") as audio_file:
-        transcript = client.audio.transcriptions.create(
+        transcript = await client.audio.transcriptions.create(
             model="whisper-1",
             file=audio_file,
             response_format="text",

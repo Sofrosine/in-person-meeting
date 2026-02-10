@@ -1,5 +1,5 @@
 import logging
-from openai import OpenAI
+from openai import AsyncOpenAI
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -20,9 +20,9 @@ async def summarize_transcript(transcript: str) -> str:
     Falls back to a basic extraction if the API call fails.
     """
     try:
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},

@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { RecordingProvider } from '@/lib/RecordingContext';
 import { registerForPushNotifications } from '@/lib/notifications';
+import { colors } from '@/lib/theme';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -63,7 +64,7 @@ function RootLayoutNav() {
     }
   }, [session, loading, segments, router]);
 
-  // Handle notification tap → deep link to meeting detail screen
+  // Handle notification tap -> deep link to meeting detail screen
   const lastNotificationResponse = Notifications.useLastNotificationResponse();
   useEffect(() => {
     if (lastNotificationResponse) {
@@ -79,8 +80,8 @@ function RootLayoutNav() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0D0D0F', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#F59E0B" />
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -90,9 +91,9 @@ function RootLayoutNav() {
       <StatusBar style="light" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: '#0D0D0F' },
-          headerTintColor: '#F5F5F0',
-          contentStyle: { backgroundColor: '#0D0D0F' },
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+          contentStyle: { backgroundColor: colors.background },
         }}
       >
         <Stack.Screen name="login" options={{ headerShown: false }} />

@@ -10,25 +10,9 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getMeeting } from '@/lib/database';
+import { formatDuration, formatDateLong } from '@/lib/formatters';
+import { colors } from '@/lib/theme';
 import type { Meeting } from '@/lib/types';
-
-function formatDuration(seconds: number | null): string {
-  if (!seconds) return '--:--';
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}m ${secs}s`;
-}
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString(undefined, {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 export default function MeetingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -64,8 +48,6 @@ export default function MeetingDetailScreen() {
   }, [fetchMeeting]);
 
   // Auto-poll every 5s while meeting is still processing
-  // This handles the case where user opens from notification
-  // before the transcript is fully ready
   useEffect(() => {
     if (meeting && (meeting.status === 'processing' || meeting.status === 'uploading')) {
       pollRef.current = setInterval(fetchMeeting, 5000);
@@ -82,7 +64,7 @@ export default function MeetingDetailScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#F59E0B" />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -90,7 +72,7 @@ export default function MeetingDetailScreen() {
   if (error || !meeting) {
     return (
       <View style={styles.centered}>
-        <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
+        <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
         <Text style={styles.errorText}>{error ?? 'Meeting not found'}</Text>
         <Pressable onPress={fetchMeeting} style={styles.retryButton}>
           <Text style={styles.retryText}>Retry</Text>
@@ -105,11 +87,11 @@ export default function MeetingDetailScreen() {
       <Text style={styles.title}>{meeting.title ?? 'Untitled Meeting'}</Text>
       <View style={styles.meta}>
         <View style={styles.metaItem}>
-          <Ionicons name="calendar-outline" size={16} color="#6B6B6B" />
-          <Text style={styles.metaText}>{formatDate(meeting.created_at)}</Text>
+          <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
+          <Text style={styles.metaText}>{formatDateLong(meeting.created_at)}</Text>
         </View>
         <View style={styles.metaItem}>
-          <Ionicons name="time-outline" size={16} color="#6B6B6B" />
+          <Ionicons name="time-outline" size={16} color={colors.textMuted} />
           <Text style={styles.metaText}>{formatDuration(meeting.duration)}</Text>
         </View>
       </View>
@@ -131,9 +113,9 @@ export default function MeetingDetailScreen() {
       ) : (
         <View style={styles.processingCard}>
           {meeting.status === 'failed' ? (
-            <Ionicons name="alert-circle-outline" size={20} color="#EF4444" />
+            <Ionicons name="alert-circle-outline" size={20} color={colors.error} />
           ) : (
-            <ActivityIndicator size="small" color="#F59E0B" />
+            <ActivityIndicator size="small" color={colors.accent} />
           )}
           <Text style={styles.processingText}>
             {meeting.status === 'processing'
@@ -153,7 +135,7 @@ export default function MeetingDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0D0D0F',
+    backgroundColor: colors.background,
   },
   content: {
     padding: 20,
@@ -163,13 +145,13 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0D0D0F',
+    backgroundColor: colors.background,
     gap: 12,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#F5F5F0',
+    color: colors.text,
     marginBottom: 12,
   },
   meta: {
@@ -183,20 +165,20 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 14,
-    color: '#6B6B6B',
+    color: colors.textMuted,
   },
   summaryCard: {
-    backgroundColor: '#1E1E23',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
     borderLeftWidth: 3,
-    borderLeftColor: '#F59E0B',
+    borderLeftColor: colors.accent,
   },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#F59E0B',
+    color: colors.accent,
     letterSpacing: 1,
     textTransform: 'uppercase',
     marginBottom: 12,
@@ -204,7 +186,7 @@ const styles = StyleSheet.create({
   summaryText: {
     fontSize: 15,
     lineHeight: 24,
-    color: '#F5F5F0',
+    color: colors.text,
   },
   section: {
     marginBottom: 24,
@@ -212,24 +194,24 @@ const styles = StyleSheet.create({
   transcriptText: {
     fontSize: 15,
     lineHeight: 26,
-    color: '#A0A0A0',
+    color: colors.textSecondary,
   },
   processingCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#1E1E23',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
   },
   processingText: {
     fontSize: 14,
-    color: '#A0A0A0',
+    color: colors.textSecondary,
     flex: 1,
   },
   errorText: {
     fontSize: 16,
-    color: '#EF4444',
+    color: colors.error,
     textAlign: 'center',
     paddingHorizontal: 32,
   },
@@ -237,12 +219,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#1E1E23',
+    backgroundColor: colors.surface,
     marginTop: 8,
   },
   retryText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#F59E0B',
+    color: colors.accent,
   },
 });

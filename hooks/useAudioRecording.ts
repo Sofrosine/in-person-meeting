@@ -72,7 +72,7 @@ async function showAndroidRecordingNotification(): Promise<string | undefined> {
       autoDismiss: false,
       data: { type: 'recording-active' },
     },
-    trigger: null, // show immediately
+    trigger: { channelId: 'recording' },
   });
 }
 
@@ -91,7 +91,6 @@ export function useAudioRecording(): UseAudioRecording {
   const [error, setError] = useState<string | null>(null);
 
   const recordingRef = useRef<Audio.Recording | null>(null);
-  const startTimeRef = useRef<number>(0);
 
   // ---- Cleanup on unmount --------------------------------------------
   useEffect(() => {
@@ -177,7 +176,6 @@ export function useAudioRecording(): UseAudioRecording {
       );
 
       recordingRef.current = recording;
-      startTimeRef.current = Date.now();
       setIsRecording(true);
       setDuration(0);
       setMetering(0);
