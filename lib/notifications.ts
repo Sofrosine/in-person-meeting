@@ -49,14 +49,6 @@ export async function registerForPushNotifications(): Promise<string | null> {
         showBadge: true,
       });
 
-      // Channel for the persistent recording indicator notification
-      await Notifications.setNotificationChannelAsync('recording', {
-        name: 'Active Recording',
-        description: 'Shown while a meeting is being recorded',
-        importance: Notifications.AndroidImportance.LOW,
-        enableVibrate: false,
-        showBadge: false,
-      });
     }
 
     // Fetch Expo push token

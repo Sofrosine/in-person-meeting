@@ -6,13 +6,151 @@ import {
   ScrollView,
   ActivityIndicator,
   Pressable,
+  type TextStyle,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { getMeeting } from '@/lib/database';
-import { formatDuration, formatDateLong } from '@/lib/formatters';
+import { formatDuration, formatDateLong, formatTimer } from '@/lib/formatters';
 import { colors } from '@/lib/theme';
 import type { Meeting } from '@/lib/types';
+
+/**
+ * Simple markdown text renderer for meeting summaries.
+ * Handles **bold**, - bullet points, and line breaks.
+ * Headings (lines with bold text and no bullet) are rendered at root level;
+ * bullet items are indented beneath them.
+ */
+function MarkdownText({ text, style }: { text: string; style?: TextStyle }) {
+  const lines = text.split('\n');
+
+  return (
+    <View style={{ gap: 4 }}>
+      {lines.map((line, lineIdx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <View key={lineIdx} style={{ height: 8 }} />;
+
+        const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('* ');
+        const content = isBullet ? trimmed.slice(2) : trimmed;
+
+        // Parse **bold** segments
+        const parts = content.split(/(\*\*[^*]+\*\*)/g);
+        const rendered = parts.map((part, partIdx) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            return (
+              <Text key={partIdx} style={{ fontWeight: '700', color: colors.text }}>
+                {part.slice(2, -2)}
+              </Text>
+            );
+          }
+          return <Text key={partIdx}>{part}</Text>;
+        });
+
+        if (isBullet) {
+          return (
+            <View key={lineIdx} style={{ flexDirection: 'row', paddingLeft: 16 }}>
+              <Text style={[style, { marginRight: 8, color: colors.accent }]}>{'•'}</Text>
+              <Text style={[style, { flex: 1 }]}>{rendered}</Text>
+            </View>
+          );
+        }
+
+        return (
+          <Text key={lineIdx} style={[style, { marginTop: lineIdx > 0 ? 8 : 0 }]}>
+            {rendered}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * Audio playback controls for the meeting recording.
+ */
+function AudioPlayer({ url }: { url: string }) {
+  const player = useAudioPlayer(url);
+  const status = useAudioPlayerStatus(player);
+
+  const isPlaying = status.playing;
+  const currentTime = Math.floor(status.currentTime);
+  const totalDuration = Math.floor(status.duration);
+  const progress = totalDuration > 0 ? currentTime / totalDuration : 0;
+
+  const togglePlayback = () => {
+    if (isPlaying) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  };
+
+  return (
+    <View style={audioStyles.container}>
+      <Pressable onPress={togglePlayback} style={audioStyles.playButton}>
+        <Ionicons
+          name={isPlaying ? 'pause' : 'play'}
+          size={24}
+          color={colors.accent}
+        />
+      </Pressable>
+      <View style={audioStyles.progressContainer}>
+        <View style={audioStyles.progressBar}>
+          <View style={[audioStyles.progressFill, { width: `${progress * 100}%` }]} />
+        </View>
+        <View style={audioStyles.timeRow}>
+          <Text style={audioStyles.timeText}>{formatTimer(currentTime)}</Text>
+          <Text style={audioStyles.timeText}>{formatTimer(totalDuration)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const audioStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    gap: 12,
+  },
+  playButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressContainer: {
+    flex: 1,
+    gap: 6,
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: colors.background,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.accent,
+    borderRadius: 2,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  timeText: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+});
 
 export default function MeetingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -96,11 +234,19 @@ export default function MeetingDetailScreen() {
         </View>
       </View>
 
+      {/* Audio Player */}
+      {meeting.audio_url && meeting.status === 'completed' && (
+        <View>
+          <Text style={styles.sectionTitle}>Recording</Text>
+          <AudioPlayer url={meeting.audio_url} />
+        </View>
+      )}
+
       {/* Summary */}
       {meeting.summary && (
         <View style={styles.summaryCard}>
           <Text style={styles.sectionTitle}>Summary</Text>
-          <Text style={styles.summaryText}>{meeting.summary}</Text>
+          <MarkdownText text={meeting.summary} style={styles.summaryText} />
         </View>
       )}
 

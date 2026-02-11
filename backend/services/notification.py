@@ -23,14 +23,10 @@ async def send_push_notification(
         logger.warning("No push token provided, skipping notification")
         return
 
-    body_text = summary_preview[:100]
-    if len(summary_preview) > 100:
-        body_text += "..."
-
     payload = {
         "to": push_token,
         "title": "Meeting transcript ready!",
-        "body": body_text,
+        "body": "Your meeting has been transcribed. Tap to view the summary.",
         "data": {
             "meetingId": meeting_id,
             "url": f"/meeting/{meeting_id}",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
 import {
   useAudioRecorder,
   useAudioRecorderState,
@@ -9,7 +9,6 @@ import {
   AudioQuality,
 } from 'expo-audio';
 import type { RecordingOptions, RecordingStatus, RecorderState } from 'expo-audio';
-import * as Notifications from 'expo-notifications';
 
 // ---------------------------------------------------------------------------
 // Custom recording preset optimized for voice / meeting capture
@@ -44,8 +43,10 @@ const MEETING_RECORDING_OPTIONS: RecordingOptions = {
 // Types
 // ---------------------------------------------------------------------------
 export interface UseAudioRecording {
-  /** Whether the recording is currently active */
+  /** Whether the recording is currently active (recording or paused) */
   isRecording: boolean;
+  /** Whether the recording is paused */
+  isPaused: boolean;
   /** Elapsed recording time in seconds (driven by expo-audio state hook) */
   duration: number;
   /** Current audio metering level (0-1) for visualizations */
@@ -54,34 +55,10 @@ export interface UseAudioRecording {
   startRecording: () => Promise<void>;
   /** Stop the recording and return the local file URI */
   stopRecording: () => Promise<string | null>;
+  /** Pause or resume the recording */
+  togglePause: () => Promise<void>;
   /** The most recent error message, or null */
   error: string | null;
-}
-
-// ---------------------------------------------------------------------------
-// Android foreground notification for recording
-// ---------------------------------------------------------------------------
-const ANDROID_NOTIFICATION_ID = 'recording-active';
-
-async function showAndroidRecordingNotification(): Promise<string | undefined> {
-  if (Platform.OS !== 'android') return undefined;
-
-  return Notifications.scheduleNotificationAsync({
-    identifier: ANDROID_NOTIFICATION_ID,
-    content: {
-      title: 'Recording in progress',
-      body: 'Tap to return to Meeting Notes',
-      sticky: true,
-      autoDismiss: false,
-      data: { type: 'recording-active' },
-    },
-    trigger: { channelId: 'recording' },
-  });
-}
-
-async function dismissAndroidRecordingNotification(): Promise<void> {
-  if (Platform.OS !== 'android') return;
-  await Notifications.dismissNotificationAsync(ANDROID_NOTIFICATION_ID);
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +66,8 @@ async function dismissAndroidRecordingNotification(): Promise<void> {
 // ---------------------------------------------------------------------------
 export function useAudioRecording(): UseAudioRecording {
   const [error, setError] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isSessionActive, setIsSessionActive] = useState(false);
   const isActiveRef = useRef(false);
 
   // Resolver for the stop() promise — waits for the isFinished callback
@@ -98,14 +77,14 @@ export function useAudioRecording(): UseAudioRecording {
   // Status listener for recording completion/error events
   const onRecordingStatus = useCallback((status: RecordingStatus) => {
     if (status.isFinished) {
-      // Resolve the pending stop promise with the final file URL
       if (finishedResolverRef.current) {
         finishedResolverRef.current(status.url);
         finishedResolverRef.current = null;
       }
       if (isActiveRef.current) {
         isActiveRef.current = false;
-        dismissAndroidRecordingNotification();
+        setIsSessionActive(false);
+        setIsPaused(false);
       }
     }
     if (status.hasError && status.error) {
@@ -115,7 +94,8 @@ export function useAudioRecording(): UseAudioRecording {
         finishedResolverRef.current = null;
       }
       isActiveRef.current = false;
-      dismissAndroidRecordingNotification();
+      setIsSessionActive(false);
+      setIsPaused(false);
     }
   }, []);
 
@@ -123,10 +103,10 @@ export function useAudioRecording(): UseAudioRecording {
   const recorder = useAudioRecorder(MEETING_RECORDING_OPTIONS, onRecordingStatus);
   const recorderState: RecorderState = useAudioRecorderState(recorder, 500);
 
-  // Derive values from the polled recorder state
-  const isRecording = recorderState.isRecording;
+  // Use session state (not polled state) to avoid UI blip on resume
+  const isRecording = isSessionActive;
   const duration = Math.floor(recorderState.durationMillis / 1000);
-  const metering = recorderState.metering !== undefined
+  const metering = recorderState.metering !== undefined && !isPaused
     ? Math.max(0, Math.min(1, (recorderState.metering + 60) / 60))
     : 0;
 
@@ -134,8 +114,9 @@ export function useAudioRecording(): UseAudioRecording {
   useEffect(() => {
     if (recorderState.mediaServicesDidReset && isActiveRef.current) {
       isActiveRef.current = false;
+      setIsSessionActive(false);
+      setIsPaused(false);
       setError('Recording was interrupted by the system.');
-      dismissAndroidRecordingNotification();
     }
   }, [recorderState.mediaServicesDidReset]);
 
@@ -144,7 +125,6 @@ export function useAudioRecording(): UseAudioRecording {
     return () => {
       if (isActiveRef.current) {
         recorder.stop();
-        dismissAndroidRecordingNotification();
       }
     };
   }, [recorder]);
@@ -161,6 +141,8 @@ export function useAudioRecording(): UseAudioRecording {
   const startRecording = useCallback(async () => {
     try {
       setError(null);
+      setIsPaused(false);
+      setIsSessionActive(false);
 
       // 1. Request permission
       const permission = await requestRecordingPermissionsAsync();
@@ -183,15 +165,32 @@ export function useAudioRecording(): UseAudioRecording {
       await recorder.prepareToRecordAsync();
       recorder.record();
       isActiveRef.current = true;
-
-      // 4. Show persistent notification on Android
-      await showAndroidRecordingNotification();
+      setIsSessionActive(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start recording';
       setError(message);
       isActiveRef.current = false;
+      setIsSessionActive(false);
     }
   }, [recorder]);
+
+  // ---- Toggle pause/resume -------------------------------------------
+  const togglePause = useCallback(async () => {
+    try {
+      if (!isActiveRef.current) return;
+
+      if (isPaused) {
+        recorder.record();
+        setIsPaused(false);
+      } else {
+        recorder.pause();
+        setIsPaused(true);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to pause/resume';
+      setError(message);
+    }
+  }, [recorder, isPaused]);
 
   // ---- Stop recording -----------------------------------------------
   const stopRecording = useCallback(async (): Promise<string | null> => {
@@ -200,12 +199,17 @@ export function useAudioRecording(): UseAudioRecording {
         return null;
       }
 
+      // If paused, resume briefly so stop works correctly
+      if (isPaused) {
+        recorder.record();
+        setIsPaused(false);
+      }
+
       // Create a promise that resolves when the RecordingStatus callback
       // fires with isFinished: true — this ensures the file is fully
       // written to disk before we try to upload it.
       const uriPromise = new Promise<string | null>((resolve) => {
         const timeout = setTimeout(() => {
-          // Safety fallback: if callback doesn't fire within 5s, use recorder.uri
           if (finishedResolverRef.current) {
             finishedResolverRef.current = null;
             resolve(recorder.uri);
@@ -220,6 +224,7 @@ export function useAudioRecording(): UseAudioRecording {
 
       await recorder.stop();
       isActiveRef.current = false;
+      setIsSessionActive(false);
 
       // Wait for the file to be fully written
       const uri = await uriPromise;
@@ -231,19 +236,17 @@ export function useAudioRecording(): UseAudioRecording {
         allowsBackgroundRecording: false,
       });
 
-      // Dismiss Android recording notification
-      await dismissAndroidRecordingNotification();
-
       return uri;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to stop recording';
       setError(message);
       isActiveRef.current = false;
+      setIsSessionActive(false);
+      setIsPaused(false);
       finishedResolverRef.current = null;
-      await dismissAndroidRecordingNotification();
       return null;
     }
-  }, [recorder]);
+  }, [recorder, isPaused]);
 
-  return { isRecording, duration, metering, startRecording, stopRecording, error };
+  return { isRecording, isPaused, duration, metering, startRecording, stopRecording, togglePause, error };
 }

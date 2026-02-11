@@ -10,74 +10,79 @@ import { formatTimer } from '@/lib/formatters';
 import { colors } from '@/lib/theme';
 
 export default function RecordScreen() {
-  const { isRecording, duration, metering, startRecording, stopRecording, error } =
-    useRecording();
+  const {
+    isRecording, isPaused, duration, metering,
+    startRecording, stopRecording, togglePause, error,
+  } = useRecording();
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Smooth metering animation with Reanimated spring
   const glowScale = useSharedValue(1);
 
   useEffect(() => {
-    const target = isRecording ? 1 + metering * 0.25 : 1;
+    const target = isRecording && !isPaused ? 1 + metering * 0.25 : 1;
     glowScale.value = withSpring(target, {
       damping: 15,
       stiffness: 120,
       mass: 0.5,
     });
-  }, [metering, isRecording, glowScale]);
+  }, [metering, isRecording, isPaused, glowScale]);
 
   const glowAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: glowScale.value }],
   }));
 
-  const handleToggleRecording = async () => {
+  const handleStart = async () => {
     if (isProcessing) return;
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    await startRecording();
+  };
 
-    if (isRecording) {
-      // ---- Stop recording & upload ------------------------------------
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setIsProcessing(true);
+  const handleStop = async () => {
+    if (isProcessing) return;
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setIsProcessing(true);
 
-      try {
-        const uri = await stopRecording();
-        if (!uri) throw new Error('No recording file produced');
+    try {
+      const uri = await stopRecording();
+      if (!uri) throw new Error('No recording file produced');
 
-        const pushToken = await registerForPushNotifications();
-        const meeting = await createMeeting(duration);
-        const audioUrl = await uploadAudio(uri, meeting.id);
-        await updateMeetingStatus(meeting.id, 'processing', audioUrl);
+      const pushToken = await registerForPushNotifications();
+      const meeting = await createMeeting(duration);
+      const audioUrl = await uploadAudio(uri, meeting.id);
+      await updateMeetingStatus(meeting.id, 'processing', audioUrl);
 
-        // Trigger backend processing
-        const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
-        const response = await fetch(`${backendUrl}/process-meeting`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            audio_url: audioUrl,
-            meeting_id: meeting.id,
-            push_token: pushToken ?? '',
-          }),
-        });
+      // Trigger backend processing
+      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+      const response = await fetch(`${backendUrl}/process-meeting`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audio_url: audioUrl,
+          meeting_id: meeting.id,
+          push_token: pushToken ?? '',
+        }),
+      });
 
-        if (!response.ok) {
-          throw new Error('Backend processing request failed');
-        }
-
-        Alert.alert(
-          'Recording saved',
-          'Your meeting is being transcribed. You\'ll get a notification when it\'s ready.',
-        );
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Something went wrong';
-        Alert.alert('Error', message);
-      } finally {
-        setIsProcessing(false);
+      if (!response.ok) {
+        throw new Error('Backend processing request failed');
       }
-    } else {
-      // ---- Start recording --------------------------------------------
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      await startRecording();
+
+      Alert.alert(
+        'Recording saved',
+        'Your meeting is being transcribed. You\'ll get a notification when it\'s ready.',
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong';
+      Alert.alert('Error', message);
+    } finally {
+      setIsProcessing(false);
     }
+  };
+
+  const handlePause = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await togglePause();
   };
 
   return (
@@ -93,50 +98,94 @@ export default function RecordScreen() {
       <Text style={styles.statusText}>
         {isProcessing
           ? 'Uploading & processing...'
-          : isRecording
-            ? 'Recording — you can leave the app'
-            : 'Tap to start recording'}
+          : isPaused
+            ? 'Recording paused'
+            : isRecording
+              ? 'Recording — you can leave the app'
+              : 'Tap to start recording'}
       </Text>
 
-      {/* Record / Stop button */}
-      <View style={styles.buttonContainer}>
-        {/* Metering glow ring (smooth spring animation) */}
-        {isRecording && (
-          <Animated.View style={[styles.glowRing, glowAnimatedStyle]} />
-        )}
-
-        <Pressable
-          onPress={handleToggleRecording}
-          disabled={isProcessing}
-          style={({ pressed }) => [
-            styles.recordButton,
-            isRecording && styles.recordButtonActive,
-            pressed && styles.recordButtonPressed,
-            isProcessing && styles.recordButtonDisabled,
-          ]}
-        >
-          {isProcessing ? (
-            <ActivityIndicator size="large" color={colors.text} />
-          ) : (
+      {/* Buttons */}
+      {!isRecording ? (
+        // Start button
+        <View style={styles.buttonContainer}>
+          <Pressable
+            onPress={handleStart}
+            disabled={isProcessing}
+            style={({ pressed }) => [
+              styles.recordButton,
+              pressed && styles.recordButtonPressed,
+              isProcessing && styles.recordButtonDisabled,
+            ]}
+          >
+            {isProcessing ? (
+              <ActivityIndicator size="large" color={colors.text} />
+            ) : (
+              <Ionicons name="mic" size={48} color={colors.accent} />
+            )}
+          </Pressable>
+        </View>
+      ) : (
+        // Pause + Stop buttons
+        <View style={styles.controlsRow}>
+          {/* Pause / Resume */}
+          <Pressable
+            onPress={handlePause}
+            disabled={isProcessing}
+            style={({ pressed }) => [
+              styles.controlButton,
+              styles.pauseButton,
+              pressed && styles.recordButtonPressed,
+            ]}
+          >
             <Ionicons
-              name={isRecording ? 'stop' : 'mic'}
-              size={48}
-              color={isRecording ? '#FFFFFF' : colors.accent}
+              name={isPaused ? 'play' : 'pause'}
+              size={32}
+              color={colors.accent}
             />
-          )}
-        </Pressable>
-      </View>
+          </Pressable>
 
-      {/* Live indicator */}
+          {/* Stop */}
+          <View style={styles.buttonContainer}>
+            {/* Metering glow ring (smooth spring animation) */}
+            {!isPaused && (
+              <Animated.View style={[styles.glowRing, glowAnimatedStyle]} />
+            )}
+            <Pressable
+              onPress={handleStop}
+              disabled={isProcessing}
+              style={({ pressed }) => [
+                styles.recordButton,
+                styles.recordButtonActive,
+                pressed && styles.recordButtonPressed,
+                isProcessing && styles.recordButtonDisabled,
+              ]}
+            >
+              {isProcessing ? (
+                <ActivityIndicator size="large" color={colors.text} />
+              ) : (
+                <Ionicons name="stop" size={48} color="#FFFFFF" />
+              )}
+            </Pressable>
+          </View>
+
+          {/* Spacer to center stop button */}
+          <View style={styles.controlButtonSpacer} />
+        </View>
+      )}
+
+      {/* Live / Paused indicator */}
       {isRecording && (
         <View style={styles.liveIndicator}>
-          <View style={styles.liveDot} />
-          <Text style={styles.liveText}>LIVE</Text>
+          <View style={[styles.liveDot, isPaused && styles.liveDotPaused]} />
+          <Text style={[styles.liveText, isPaused && styles.liveTextPaused]}>
+            {isPaused ? 'PAUSED' : 'LIVE'}
+          </Text>
         </View>
       )}
 
       {/* Background hint */}
-      {isRecording && (
+      {isRecording && !isPaused && (
         <Text style={styles.hintText}>
           Recording continues in background and when screen is locked
         </Text>
@@ -174,6 +223,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
     paddingHorizontal: 32,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  controlButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlButtonSpacer: {
+    width: 56,
+  },
+  pauseButton: {
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.accent,
   },
   buttonContainer: {
     width: 140,
@@ -222,11 +292,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error,
     marginRight: 8,
   },
+  liveDotPaused: {
+    backgroundColor: colors.accent,
+  },
   liveText: {
     fontSize: 13,
     fontWeight: '600',
     color: colors.error,
     letterSpacing: 2,
+  },
+  liveTextPaused: {
+    color: colors.accent,
   },
   hintText: {
     fontSize: 13,
