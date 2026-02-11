@@ -28,6 +28,7 @@
         "backgroundColor": "#0D0D0F"
       },
       "package": "com.meetingnotes.app",
+      "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.RECORD_AUDIO",

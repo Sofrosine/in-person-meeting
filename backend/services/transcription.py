@@ -33,6 +33,8 @@ async def mock_transcribe(audio_path: str) -> str:
     """
     logger.info("Using mock transcription")
     return (
+        "[MOCK DATA] This is a sample transcript generated for testing purposes. "
+        "Real transcription requires a valid OpenAI API key.\n\n"
         "Good morning everyone, let's get started with our weekly sync.\n\n"
         "First, I'd like to go over the progress on the mobile app. The recording "
         "feature is now working in background mode on both iOS and Android. We've "

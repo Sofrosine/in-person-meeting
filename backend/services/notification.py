@@ -45,8 +45,6 @@ async def send_push_notification(
             response.raise_for_status()
             result = response.json()
             logger.info(f"Push notification sent for meeting {meeting_id}")
-            logger.info(f"Push token used: {push_token}")
-            logger.info(f"Expo push response: {result}")
 
             # Check for per-ticket errors (Expo returns 200 even on errors)
             data = result.get("data", [])

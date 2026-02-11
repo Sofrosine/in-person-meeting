@@ -6,11 +6,13 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "You are a meeting assistant. Summarize the following meeting transcript. "
+    "Respond in the same language the transcript is written in. "
     "Structure your response as:\n"
-    "- **Key Topics**: Main subjects discussed\n"
-    "- **Decisions**: Any decisions that were made\n"
-    "- **Action Items**: Tasks assigned with owners if mentioned\n\n"
-    "Keep the summary under 200 words. Be concise and factual."
+    "- Key Topics: Main subjects discussed\n"
+    "- Decisions: Any decisions that were made\n"
+    "- Action Items: Tasks assigned with owners if mentioned\n\n"
+    "Keep the summary under 200 words. Be concise and factual. "
+    "Do not use markdown formatting."
 )
 
 

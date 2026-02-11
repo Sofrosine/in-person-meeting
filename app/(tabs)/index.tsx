@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, Alert, ActivityIndicator } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRecording } from '@/lib/RecordingContext';
@@ -12,6 +13,22 @@ export default function RecordScreen() {
   const { isRecording, duration, metering, startRecording, stopRecording, error } =
     useRecording();
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Smooth metering animation with Reanimated spring
+  const glowScale = useSharedValue(1);
+
+  useEffect(() => {
+    const target = isRecording ? 1 + metering * 0.25 : 1;
+    glowScale.value = withSpring(target, {
+      damping: 15,
+      stiffness: 120,
+      mass: 0.5,
+    });
+  }, [metering, isRecording, glowScale]);
+
+  const glowAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: glowScale.value }],
+  }));
 
   const handleToggleRecording = async () => {
     if (isProcessing) return;
@@ -26,7 +43,6 @@ export default function RecordScreen() {
         if (!uri) throw new Error('No recording file produced');
 
         const pushToken = await registerForPushNotifications();
-        console.log('[Recording] Push token for backend:', pushToken);
         const meeting = await createMeeting(duration);
         const audioUrl = await uploadAudio(uri, meeting.id);
         await updateMeetingStatus(meeting.id, 'processing', audioUrl);
@@ -64,9 +80,6 @@ export default function RecordScreen() {
     }
   };
 
-  // Metering drives the glow ring size around the record button
-  const glowScale = isRecording ? 1 + metering * 0.25 : 1;
-
   return (
     <View style={styles.container}>
       {error && <Text style={styles.errorText}>{error}</Text>}
@@ -87,14 +100,9 @@ export default function RecordScreen() {
 
       {/* Record / Stop button */}
       <View style={styles.buttonContainer}>
-        {/* Metering glow ring */}
+        {/* Metering glow ring (smooth spring animation) */}
         {isRecording && (
-          <View
-            style={[
-              styles.glowRing,
-              { transform: [{ scale: glowScale }] },
-            ]}
-          />
+          <Animated.View style={[styles.glowRing, glowAnimatedStyle]} />
         )}
 
         <Pressable
