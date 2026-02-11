@@ -93,6 +93,7 @@ export async function getMeetings(): Promise<Meeting[]> {
 
 /**
  * Fetch a single meeting by ID.
+ * Generates a fresh signed URL for audio playback (the stored URL expires after 1 hour).
  */
 export async function getMeeting(id: string): Promise<Meeting> {
   const { data, error } = await supabase
@@ -102,6 +103,18 @@ export async function getMeeting(id: string): Promise<Meeting> {
     .single();
 
   if (error) throw new Error(`Failed to fetch meeting: ${error.message}`);
+
+  // Generate a fresh signed URL for audio playback
+  if (data.status === 'completed' && data.user_id) {
+    const filePath = `${data.user_id}/${data.id}.m4a`;
+    const { data: signedData } = await supabase.storage
+      .from('recordings')
+      .createSignedUrl(filePath, 3600);
+    if (signedData?.signedUrl) {
+      data.audio_url = signedData.signedUrl;
+    }
+  }
+
   return data;
 }
 

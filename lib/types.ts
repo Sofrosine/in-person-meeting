@@ -19,14 +19,3 @@ export interface PushToken {
   token: string;
   created_at: string;
 }
-
-export interface ProcessMeetingRequest {
-  audio_url: string;
-  meeting_id: string;
-  push_token: string;
-}
-
-export interface ProcessMeetingResponse {
-  status: string;
-  meeting_id: string;
-}

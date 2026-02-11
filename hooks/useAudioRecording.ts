@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
 import {
   useAudioRecorder,
   useAudioRecorderState,
@@ -128,14 +127,6 @@ export function useAudioRecording(): UseAudioRecording {
       }
     };
   }, [recorder]);
-
-  // ---- Handle app state changes (background → foreground) -----------
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', () => {
-      // RecorderState hook auto-syncs on next poll; no manual action needed
-    });
-    return () => subscription.remove();
-  }, []);
 
   // ---- Start recording ----------------------------------------------
   const startRecording = useCallback(async () => {

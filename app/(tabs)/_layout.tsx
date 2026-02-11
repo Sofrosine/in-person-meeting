@@ -1,11 +1,13 @@
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRecording } from '@/lib/RecordingContext';
+import { useAuth } from '@/lib/AuthContext';
 import { colors } from '@/lib/theme';
 
 export default function TabLayout() {
   const { isRecording } = useRecording();
+  const { signOut } = useAuth();
 
   return (
     <Tabs
@@ -38,6 +40,11 @@ export default function TabLayout() {
           title: 'Meetings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="list-outline" size={size} color={color} />
+          ),
+          headerRight: () => (
+            <Pressable onPress={signOut} style={{ marginRight: 16 }}>
+              <Ionicons name="log-out-outline" size={24} color={colors.textMuted} />
+            </Pressable>
           ),
         }}
       />
