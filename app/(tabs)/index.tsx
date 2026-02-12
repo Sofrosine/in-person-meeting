@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Pressable, Alert, ActivityIndicator } from 'rea
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useRecording } from '@/lib/RecordingContext';
+import { useRecording } from '@/contexts/RecordingContext';
 import { createMeeting, uploadAudio, updateMeetingStatus } from '@/lib/database';
 import { registerForPushNotifications } from '@/lib/notifications';
 import { formatTimer } from '@/lib/formatters';

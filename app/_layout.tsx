@@ -5,8 +5,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { AuthProvider, useAuth } from '@/lib/AuthContext';
-import { RecordingProvider } from '@/lib/RecordingContext';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { RecordingProvider } from '@/contexts/RecordingContext';
 import { registerForPushNotifications } from '@/lib/notifications';
 import { colors } from '@/lib/theme';
 
