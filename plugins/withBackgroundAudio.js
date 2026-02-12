@@ -50,26 +50,6 @@ function addPermissionIfMissing(manifest, permissionName) {
   }
 }
 
-/**
- * Adds an Android <service> declaration to the <application> block.
- * Prevents duplicate entries by checking the service name.
- */
-function addServiceIfMissing(application, serviceName, attrs) {
-  if (!application.service) {
-    application.service = [];
-  }
-
-  const exists = application.service.some(
-    (s) => s.$?.['android:name'] === serviceName,
-  );
-
-  if (!exists) {
-    application.service.push({
-      $: { 'android:name': serviceName, ...attrs },
-    });
-  }
-}
-
 // ---------------------------------------------------------------------------
 // iOS: Info.plist modifications
 // ---------------------------------------------------------------------------
@@ -130,6 +110,8 @@ function withBackgroundAudioIOS(config, props = {}) {
  * Foreground service:
  * - A <service> element with foregroundServiceType="microphone" is declared.
  *   This keeps the recording process alive when the app is backgrounded.
+ *   expo-audio uses this service internally via its AudioModule to maintain
+ *   an active audio session with a persistent notification.
  *
  * Important Android 14+ behavior:
  * - The foreground service MUST be started while the app has a visible
@@ -154,19 +136,29 @@ function withBackgroundAudioAndroid(config) {
     }
 
     // ---- Foreground service declaration -------------------------------
+    // Declares a foreground service with microphone type so Android keeps
+    // the recording alive in the background. expo-audio's native module
+    // manages the service lifecycle and persistent notification.
     const application = manifest.application?.[0];
     if (application) {
-      const packageName =
-        androidConfig.modResults.manifest.$?.package ?? 'com.meetingnotes.app';
+      if (!application.service) {
+        application.service = [];
+      }
 
-      addServiceIfMissing(
-        application,
-        `${packageName}.AudioRecordingService`,
-        {
-          'android:foregroundServiceType': 'microphone',
-          'android:exported': 'false',
-        },
+      const serviceName = 'expo.modules.audio.AudioForegroundService';
+      const exists = application.service.some(
+        (s) => s.$?.['android:name'] === serviceName,
       );
+
+      if (!exists) {
+        application.service.push({
+          $: {
+            'android:name': serviceName,
+            'android:foregroundServiceType': 'microphone',
+            'android:exported': 'false',
+          },
+        });
+      }
     }
 
     return androidConfig;

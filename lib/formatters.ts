@@ -8,7 +8,7 @@ export function formatTimer(seconds: number): string {
 
 /** Format seconds into a compact duration string (e.g. "5:03") for list cards */
 export function formatDuration(seconds: number | null): string {
-  if (!seconds) return '--:--';
+  if (seconds == null) return '--:--';
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${String(secs).padStart(2, '0')}`;

@@ -190,10 +190,12 @@ export function useAudioRecording(): UseAudioRecording {
         return null;
       }
 
-      // If paused, resume briefly so stop works correctly
+      // If paused, resume briefly so stop works correctly.
+      // A short delay ensures the recorder has fully resumed before stopping.
       if (isPaused) {
         recorder.record();
         setIsPaused(false);
+        await new Promise((r) => setTimeout(r, 300));
       }
 
       // Create a promise that resolves when the RecordingStatus callback

@@ -66,16 +66,16 @@ function RootLayoutNav() {
   // Handle notification tap -> deep link to meeting detail screen
   const lastNotificationResponse = Notifications.useLastNotificationResponse();
   useEffect(() => {
-    if (lastNotificationResponse) {
-      const data = lastNotificationResponse.notification.request.content.data;
-      if (data?.type === 'recording-active') return;
+    if (!lastNotificationResponse || loading || !session) return;
 
-      const meetingId = data?.meetingId;
-      if (meetingId && typeof meetingId === 'string') {
-        router.push(`/meeting/${meetingId}`);
-      }
+    const data = lastNotificationResponse.notification.request.content.data;
+    if (data?.type === 'recording-active') return;
+
+    const meetingId = data?.meetingId;
+    if (meetingId && typeof meetingId === 'string') {
+      router.push(`/meeting/${meetingId}`);
     }
-  }, [lastNotificationResponse, router]);
+  }, [lastNotificationResponse, loading, session, router]);
 
   if (loading) {
     return (

@@ -31,7 +31,7 @@ npx expo prebuild --clean
 npx expo run:ios --device    # or npx expo run:android
 ```
 
-> **Note:** When testing on a physical iOS device, the backend URL in `.env` must use your machine's local IP (e.g. `http://192.168.1.x:8000`) instead of `localhost`. iOS requires `NSAllowsLocalNetworking` for plain HTTP to local IPs — this is already configured in `app.json`.
+> **Note:** When testing on a physical device (iOS or Android), ensure your phone and laptop are on the **same Wi-Fi network**. Set `EXPO_PUBLIC_BACKEND_URL` in `.env` to your laptop's local IP (e.g. `http://192.168.1.x:8000`) instead of `localhost`, since `localhost` on the device refers to the phone itself. You can find your IP with `ipconfig getifaddr en0` (macOS) or `hostname -I` (Linux). The backend must also be started with `--host 0.0.0.0` to accept connections from the local network. For iOS, `NSAllowsLocalNetworking` is already configured in `app.json` to allow plain HTTP to local IPs.
 
 ### 2. Backend
 
@@ -86,13 +86,30 @@ A test account is pre-configured in the Supabase project:
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (bypasses RLS) |
 | `USE_MOCK_TRANSCRIPTION` | Set to `true` to skip real API calls |
 
+### Push Notifications Setup
+
+Push notifications use **Expo Push**, which routes to the correct platform service (APNs for iOS, FCM for Android) automatically.
+
+**Android (FCM):**
+1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+2. Add an Android app with your bundle ID (`com.sofrosine.meetingnotes`)
+3. Download `google-services.json` and place it in the project root
+4. Upload the Firebase Service Account Key (FCM V1) to the [Expo dashboard](https://expo.dev) under Project → Credentials → Android → Push Key
+
+**iOS (APNs):**
+1. Requires a paid Apple Developer account ($99/year)
+2. Generate an APNs Key (.p8 file) in the [Apple Developer portal](https://developer.apple.com/account/resources/authkeys/list)
+3. Upload the key to the [Expo dashboard](https://expo.dev) under Project → Credentials → iOS → Push Key
+
+> **Note:** The app code handles both platforms — token registration, notification display, and deep linking all work cross-platform. The only difference is the credential setup above. The demo screen recording uses Android where FCM is configured.
+
 ## Architecture Decisions
 
 **Custom Config Plugin over manual native edits** - A JavaScript Expo config plugin (`plugins/withBackgroundAudio.js`) declaratively configures both iOS (UIBackgroundModes, microphone permission) and Android (RECORD_AUDIO, FOREGROUND_SERVICE_MICROPHONE, foreground service declaration) native projects. This keeps native config reproducible across `npx expo prebuild` runs without ejecting.
 
 **expo-audio hooks over setInterval** - The recording timer uses expo-audio's `useAudioRecorderState` hook (500ms polling) instead of JavaScript `setInterval`. JS timers are throttled/paused when the app is backgrounded; the native recorder state continues tracking accurately. The hook-based API also eliminates manual ref management for the recorder instance.
 
-**Signed URLs for private storage** - Audio files are stored in a private Supabase Storage bucket with RLS. The mobile app generates a time-limited signed URL (1 hour) for the backend to download, avoiding the need to pass auth credentials to the backend for storage access.
+**Expo Push + `useLastNotificationResponse` for deep linking** - Push notifications use Expo's push service (abstracting APNs/FCM) so the backend sends to a single Expo endpoint regardless of platform. On the client, `useLastNotificationResponse` handles notification taps across all app states (foreground, background, killed) and navigates to `/meeting/[id]` via Expo Router. The handler is guarded by auth state to prevent navigation before session restoration.
 
 **Background task over synchronous processing** - The `/process-meeting` endpoint returns immediately while a FastAPI `BackgroundTask` runs the pipeline (download, transcribe, summarize, notify). The meeting detail screen auto-polls every 5s during processing so users see live status updates.
 
@@ -108,19 +125,20 @@ app/                    # Expo Router screens
   _layout.tsx           # Root layout with auth gating + notifications
 plugins/                # Custom Expo config plugin
   withBackgroundAudio.js
-hooks/                  # Custom React hooks
-  useAudioRecording.ts  # Core recording logic
-lib/                    # Shared utilities
+contexts/               # React context providers
   AuthContext.tsx        # Supabase auth provider
   RecordingContext.tsx   # Recording state provider
-  database.ts           # Supabase CRUD operations
-  notifications.ts      # Push token registration
+hooks/                  # Custom React hooks
+  useAudioRecording.ts  # Core recording logic (pause/resume, metering)
+lib/                    # Shared utilities
+  database.ts           # Supabase CRUD + fresh signed URLs
+  notifications.ts      # Push token registration + Android channels
   supabase.ts           # Supabase client
   types.ts              # TypeScript interfaces
   theme.ts              # Color palette constants
   formatters.ts         # Date/time formatting
 backend/                # Python FastAPI
-  main.py               # API endpoints + processing pipeline
+  main.py               # API endpoints + background processing pipeline
   config.py             # Environment configuration
   services/
     transcription.py    # OpenAI Whisper integration
@@ -132,7 +150,6 @@ supabase/
 
 ## What I'd Improve With More Time
 
-- **True Android foreground service** - Implement a native Java/Kotlin `Service` class that binds to the audio session, ensuring reliable long-duration background recording on Android 12+ where the OS aggressively kills background processes.
 - **Audio chunking for long meetings** - Whisper has a 25 MB file size limit. For recordings longer than ~25 minutes, split the audio into segments and transcribe each in parallel, then merge the results.
 - **Offline queue** - Cache recordings locally when there's no network, then upload and process when connectivity returns. Use expo-task-manager for background upload tasks.
 - **Meeting title editing** - Allow users to rename meetings after recording instead of the auto-generated "Meeting {date}" title.

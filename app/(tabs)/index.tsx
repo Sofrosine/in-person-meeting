@@ -7,6 +7,7 @@ import { useRecording } from '@/contexts/RecordingContext';
 import { createMeeting, uploadAudio, updateMeetingStatus } from '@/lib/database';
 import { registerForPushNotifications } from '@/lib/notifications';
 import { formatTimer } from '@/lib/formatters';
+import { API_BASE_URL } from '@/lib/config';
 import { colors } from '@/lib/theme';
 
 export default function RecordScreen() {
@@ -53,8 +54,7 @@ export default function RecordScreen() {
       await updateMeetingStatus(meeting.id, 'processing', audioUrl);
 
       // Trigger backend processing
-      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
-      const response = await fetch(`${backendUrl}/process-meeting`, {
+      const response = await fetch(`${API_BASE_URL}/process-meeting`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -164,7 +164,7 @@ export default function RecordScreen() {
               {isProcessing ? (
                 <ActivityIndicator size="large" color={colors.text} />
               ) : (
-                <Ionicons name="stop" size={48} color="#FFFFFF" />
+                <Ionicons name="stop" size={48} color={colors.text} />
               )}
             </Pressable>
           </View>
