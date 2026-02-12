@@ -2,6 +2,10 @@
 
 A React Native/Expo app that records in-person meetings with background audio capture, AI-powered transcription (OpenAI Whisper), GPT summarization, and push notifications with deep linking.
 
+## Demo
+
+[Screen recording](https://drive.google.com/file/d/1mVmBMz1UJLcCs_U_nihLnqgGqwVVLezZ/view?usp=sharing) — Full flow: start recording → background app → stop → receive notification → view transcript
+
 ## Quick Start
 
 ### Prerequisites
