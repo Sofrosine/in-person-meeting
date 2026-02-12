@@ -96,7 +96,7 @@ Push notifications use **Expo Push**, which routes to the correct platform servi
 
 **Android (FCM):**
 1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
-2. Add an Android app with your bundle ID (`com.sofrosine.meetingnotes`)
+2. Add an Android app with your bundle ID (`com.meetingnotes.app`)
 3. Download `google-services.json` and place it in the project root
 4. Upload the Firebase Service Account Key (FCM V1) to the [Expo dashboard](https://expo.dev) under Project → Credentials → Android → Push Key
 
